@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RailcarTrips.Client/RailcarTrips.Client.csproj" />
+    <Project Path="src/RailcarTrips.Server/RailcarTrips.Server.csproj" />
+    <Project Path="src/RailcarTrips.Shared/RailcarTrips.Shared.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,29 @@
+﻿@page "/"
+
+<PageTitle>Railcar Trips</PageTitle>
+
+<h3>Welcome to Railcar Trips</h3>
+
+<p>
+    This application processes railcar equipment events into trips.
+    Navigate to the <a href="railcar-trips"><strong>Railcar Trips</strong></a> page to get started.
+</p>
+
+<div class="card" style="max-width: 600px;">
+    <div class="card-body">
+        <h5 class="card-title">How it works</h5>
+        <ol>
+            <li>Upload a CSV file containing equipment events.</li>
+            <li>Events are processed and grouped into trips per railcar.</li>
+            <li>View all trips in a data grid.</li>
+            <li>Click on any trip to see its detailed events in chronological order.</li>
+        </ol>
+        <h6>Event Codes</h6>
+        <ul class="list-unstyled">
+            <li><span class="badge bg-success">W</span> Released — starts a new trip</li>
+            <li><span class="badge bg-primary">A</span> Arrived — intermediate stop</li>
+            <li><span class="badge bg-warning text-dark">D</span> Departed — intermediate stop</li>
+            <li><span class="badge bg-danger">Z</span> Placed — ends the trip</li>
+        </ul>
+    </div>
+</div>

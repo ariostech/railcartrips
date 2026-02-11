@@ -1,0 +1,240 @@
+@page "/railcar-trips"
+@using RailcarTrips.Client.Services
+@using RailcarTrips.Shared.Models
+@inject RailcarTripsApiService Api
+
+<PageTitle>Railcar Trips</PageTitle>
+
+<h3>Railcar Trips</h3>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h5 class="card-title">Upload Equipment Events</h5>
+        <p class="card-text text-muted">
+            Upload a CSV file containing equipment events to process into trips.
+        </p>
+        <div class="d-flex align-items-center gap-3">
+            <InputFile OnChange="OnFileSelected" accept=".csv" class="form-control" style="max-width: 400px;" />
+            <button type="button" class="btn btn-primary" @onclick="ProcessFile" disabled="@(!CanProcess)">
+                @if (isProcessing)
+                {
+                    <span class="spinner-border spinner-border-sm me-1" role="status"></span>
+                    <span>Processing...</span>
+                }
+                else
+                {
+                    <span>Process Events</span>
+                }
+            </button>
+        </div>
+
+        @if (uploadResult != null)
+        {
+            <div class="alert @(uploadResult.Success ? "alert-success" : "alert-danger") mt-3" role="alert">
+                @if (uploadResult.Success)
+                {
+                    <strong>Success!</strong>
+                    <span>Created @uploadResult.TripsCreated trips from @uploadResult.EventsProcessed events.</span>
+                    @if (uploadResult.OrphanedEvents > 0)
+                    {
+                        <span class="text-warning ms-2">(@uploadResult.OrphanedEvents orphaned events skipped)</span>
+                    }
+                }
+                else
+                {
+                    <strong>Error:</strong> <span>@uploadResult.ErrorMessage</span>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (trips == null)
+{
+    <p><em>Upload a file to see processed trips, or loading existing trips...</em></p>
+}
+else if (trips.Count == 0)
+{
+    <p><em>No trips found. Upload an equipment events CSV file to get started.</em></p>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-striped table-hover">
+            <thead class="table-dark">
+                <tr>
+                    <th>Equipment Id</th>
+                    <th>Origin</th>
+                    <th>Destination</th>
+                    <th>Start (UTC)</th>
+                    <th>End (UTC)</th>
+                    <th>Total Hours</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var trip in trips)
+                {
+                    <tr class="@(selectedTripId == trip.Id ? "table-active" : "")"
+                        style="cursor: pointer;"
+                        @onclick="() => SelectTrip(trip.Id)">
+                        <td>@trip.EquipmentId</td>
+                        <td>@trip.OriginCityName</td>
+                        <td>@trip.DestinationCityName</td>
+                        <td>@trip.StartUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@trip.EndUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td>@trip.TotalTripHours.ToString("N2")</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-info" @onclick="() => SelectTrip(trip.Id)" @onclick:stopPropagation="true">
+                                Details
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (selectedTripDetail != null)
+{
+    <div class="card mt-3 border-info">
+        <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+            <span>
+                <strong>Trip Events</strong> — @selectedTripDetail.Trip.EquipmentId:
+                @selectedTripDetail.Trip.OriginCityName → @selectedTripDetail.Trip.DestinationCityName
+            </span>
+            <button class="btn btn-sm btn-light" @onclick="ClearSelection">✕ Close</button>
+        </div>
+        <div class="card-body">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Event</th>
+                        <th>City</th>
+                        <th>Local Time</th>
+                        <th>UTC Time</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ int seq = 1; }
+                    @foreach (var evt in selectedTripDetail.Events)
+                    {
+                        <tr>
+                            <td>@(seq++)</td>
+                            <td>
+                                <span class="badge @GetEventBadgeClass(evt.EventCode)">
+                                    @evt.EventCode
+                                </span>
+                                @evt.EventDescription
+                            </td>
+                            <td>@evt.CityName</td>
+                            <td>@evt.EventTimeLocal.ToString("yyyy-MM-dd HH:mm")</td>
+                            <td>@evt.EventTimeUtc.ToString("yyyy-MM-dd HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private List<TripDto>? trips;
+    private TripDetailDto? selectedTripDetail;
+    private int? selectedTripId;
+
+    private IBrowserFile? selectedFile;
+    private UploadResultDto? uploadResult;
+    private bool isProcessing;
+
+    private bool CanProcess => selectedFile != null && !isProcessing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            trips = await Api.GetTripsAsync();
+        }
+        catch
+        {
+            trips = new();
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        uploadResult = null;
+    }
+
+    private async Task ProcessFile()
+    {
+        if (selectedFile == null) return;
+
+        isProcessing = true;
+        uploadResult = null;
+        selectedTripDetail = null;
+        selectedTripId = null;
+
+        try
+        {
+            using var stream = selectedFile.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            uploadResult = await Api.UploadEventsFileAsync(stream, selectedFile.Name);
+
+            if (uploadResult?.Success == true)
+            {
+                trips = await Api.GetTripsAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            uploadResult = new UploadResultDto
+            {
+                Success = false,
+                ErrorMessage = $"An error occurred: {ex.Message}"
+            };
+        }
+        finally
+        {
+            isProcessing = false;
+        }
+    }
+
+    private async Task SelectTrip(int tripId)
+    {
+        if (selectedTripId == tripId)
+        {
+            ClearSelection();
+            return;
+        }
+
+        selectedTripId = tripId;
+
+        try
+        {
+            selectedTripDetail = await Api.GetTripDetailAsync(tripId);
+        }
+        catch
+        {
+            selectedTripDetail = null;
+            // TODO: Show error toast/notification
+        }
+    }
+
+    private void ClearSelection()
+    {
+        selectedTripId = null;
+        selectedTripDetail = null;
+    }
+
+    private static string GetEventBadgeClass(string code) => code switch
+    {
+        "W" => "bg-success",
+        "A" => "bg-primary",
+        "D" => "bg-warning text-dark",
+        "Z" => "bg-danger",
+        _ => "bg-secondary"
+    };
+}
